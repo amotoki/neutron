@@ -18,6 +18,7 @@
 
 from quantum.plugins.nec.common import config
 from quantum.plugins.nec.common import exceptions as nexc
+from quantum.plugins.nec.common import tenant_lib
 from quantum.plugins.nec.db import api as ndb
 from quantum.plugins.nec import drivers
 
@@ -34,6 +35,7 @@ class OFCManager(object):
 
     def __init__(self):
         self.driver = drivers.get_driver(config.OFC.driver)(config.OFC)
+        self.keyclient = tenant_lib.Client(config.CONF.keystone_authtoken)
 
     def _get_ofc_id(self, context, resource, quantum_id):
         return ndb.get_ofc_id_lookup_both(context.session,
@@ -50,10 +52,23 @@ class OFCManager(object):
     def _del_ofc_item(self, context, resource, quantum_id):
         ndb.del_ofc_item_lookup_both(context.session, resource, quantum_id)
 
-    def create_ofc_tenant(self, context, tenant_id):
-        desc = "ID=%s at OpenStack." % tenant_id
-        ofc_tenant_id = self.driver.create_tenant(desc, tenant_id)
-        self._add_ofc_item(context, "ofc_tenant", tenant_id, ofc_tenant_id)
+    def ensure_ofc_tenant(self, context, tenant_id):
+        with context.session.begin(subtransactions=True):
+            if not self.ofc.exists_ofc_tenant(context, new_net['tenant_id']):
+                tenant_name = self.keyclient.get_tenant_name(tenant_id)
+                ofc_tenant_id = self.driver.generate_tenant_id(tenant_id,
+                                                               tenant_name)
+                # When race condition, it may fail
+                self._add_ofc_item(context, "ofc_tenant", tenant_id,
+                                   ofc_tenant_id)
+                desc = "ID=%s at OpenStack." % tenant_id
+                # remote call
+                self.driver.create_tenant(desc, ofc_tenant_id)
+
+    #def create_ofc_tenant(self, context, tenant_id):
+    #    desc = "ID=%s at OpenStack." % tenant_id
+    #    ofc_tenant_id = self.driver.create_tenant(desc, tenant_id)
+    #    self._add_ofc_item(context, "ofc_tenant", tenant_id, ofc_tenant_id)
 
     def exists_ofc_tenant(self, context, tenant_id):
         return self._exists_ofc_item(context, "ofc_tenant", tenant_id)

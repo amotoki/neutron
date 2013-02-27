@@ -19,9 +19,16 @@
 import re
 import uuid
 
+from quantum.plugins.nec.common import config
 from quantum.plugins.nec.common import ofc_client
 from quantum.plugins.nec.db import api as ndb
 from quantum.plugins.nec import ofc_driver_base
+
+
+# Maximum length of ID on PFC
+MAX_ID_LEN = 31
+# Maximum length of description field on PFC
+MAX_DESC_LEN = 127
 
 
 class PFCDriverBase(ofc_driver_base.OFCDriverBase):
@@ -62,19 +69,39 @@ class PFCDriverBase(ofc_driver_base.OFCDriverBase):
             # directly here to accept tenant_id as UUID string
             uuid_str = str(uuid.UUID(id_str)).replace('-', '')
             uuid_no_version = uuid_str[:12] + uuid_str[13:]
-            return uuid_no_version[:31]
+            return uuid_no_version[:MAX_ID_LEN]
         except:
-            return self._generate_pfc_str(id_str)[:31]
+            return self._generate_pfc_str(id_str)[:MAX_ID_LEN]
 
     def _generate_pfc_description(self, desc):
         """Generate Description on PFC
 
         Currently, PFC Description must be less than 128.
         """
-        return self._generate_pfc_str(desc)[:127]
+        return self._generate_pfc_str(desc)[:MAX_DESC_LEN]
+
+    def _generate_pfc_tenant_id(self, tenant_id):
+        """Generate tenant id on PFC based on keystone tenant name
+
+        To lower the possibility of conflict, a generated id has
+        a format of <tenant_name>__<prefix_of_tenant_id>.
+        If a tenant with a same name already exists on OFC,
+        generate a tenant id only from tenant_id since keystone
+        ensures tenant_id is unique.
+        """
+        try:
+            tenant_name = self.keystoneclient.tenants.get(tenant_id).name
+            # Make sure to use at least 8 chars from UUID of tenant_id
+            # to lower the possibility of OFC tenant name conflict.
+            tenant_name = tenant_name[:MAX_ID_LEN-10]
+            ofc_tenant_id = '%s__%s' % (tenant_name, tenant_id)
+            ofc_tenant_id = self._generate_pfc_str(ofc_tenant_id)
+            if ndb.find_ofc_item(
+        except key_exc.ClientException:
+            return
 
     def create_tenant(self, description, tenant_id=None):
-        ofc_tenant_id = self._generate_pfc_id(tenant_id)
+        ofc_tenant_id = self._get_pfc_tenant_id(tenant_id)
         body = {'id': ofc_tenant_id}
         res = self.client.post('/tenants', body=body)
         return '/tenants/' + ofc_tenant_id

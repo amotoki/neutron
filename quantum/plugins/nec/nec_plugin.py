@@ -231,8 +231,7 @@ class NECPluginV2(nec_plugin_base.NECPluginV2Base,
                                          OperationalStatus.BUILD)
 
         try:
-            if not self.ofc.exists_ofc_tenant(context, new_net['tenant_id']):
-                self.ofc.create_ofc_tenant(context, new_net['tenant_id'])
+            self.ofc.ensure_ofc_tenant(context, new_net['tenant_id'])
             self.ofc.create_ofc_network(context, new_net['tenant_id'],
                                         new_net['id'], new_net['name'])
         except (nexc.OFCException, nexc.OFCConsistencyBroken) as exc:
