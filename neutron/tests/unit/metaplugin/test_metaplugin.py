@@ -18,7 +18,6 @@
 import os
 
 import mock
-import mox
 from oslo.config import cfg
 import stubout
 import testtools
@@ -81,7 +80,6 @@ class MetaNeutronPluginV2Test(base.BaseTestCase):
 
         setup_metaplugin_conf()
 
-        self.mox = mox.Mox()
         self.stubs = stubout.StubOutForTesting()
         self.client_cls_p = mock.patch('neutronclient.v2_0.client.Client')
         client_cls = self.client_cls_p.start()
@@ -306,9 +304,7 @@ class MetaNeutronPluginV2Test(base.BaseTestCase):
         self.fail("No Error is not raised")
 
     def tearDown(self):
-        self.mox.UnsetStubs()
         self.stubs.UnsetAll()
         self.stubs.SmartUnsetAll()
-        self.mox.VerifyAll()
         db.clear_db()
         super(MetaNeutronPluginV2Test, self).tearDown()
